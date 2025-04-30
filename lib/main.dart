@@ -3,18 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'dart:convert';
 import 'calc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'save.dart';
 
 part 'main.g.dart';
 
 // 难度显示名称
 final Map<String, String> difficultyNames = {
-    '3': 'SPH',
-    '4': 'SPA',
-    '10': 'SPL',
-    '8': 'DPH',
-    '9': 'DPA',
-    '11': 'DPL',
+  '3': 'SPH',
+  '4': 'SPA',
+  '10': 'SPL',
+  '8': 'DPH',
+  '9': 'DPA',
+  '11': 'DPL',
 };
 
 // 歌曲数据模型
@@ -52,15 +52,13 @@ Future<List<Song>> loadSongs() async {
   String jsonString = await rootBundle.loadString('assets/data_fixed.json');
   final jsonData = json.decode(jsonString);
   print('JSON data loaded: ${jsonData['body'].length} songs');
-  
+
   final List<dynamic> bodyList = jsonData['body'];
-  final songs = bodyList
-      .map((songJson) {
-        print('Processing song: ${songJson['title']}');
-        return Song.fromJson(songJson as Map<String, dynamic>);
-      })
-      .toList();
-  
+  final songs = bodyList.map((songJson) {
+    print('Processing song: ${songJson['title']}');
+    return Song.fromJson(songJson as Map<String, dynamic>);
+  }).toList();
+
   print('Total songs processed: ${songs.length}');
   return songs;
 }
@@ -96,11 +94,11 @@ class _SongSearchPageState extends State<SongSearchPage> {
   String query = '';
   bool isLoading = true;
   String? errorMessage;
-  
+
   // 难度选项和选中状态
   final Map<String, bool> difficultyFilters = {
-    '3': true,  // SPH
-    '4': true,  // SPA
+    '3': true, // SPH
+    '4': true, // SPA
     '10': true, // SPL
     // '8': false,  // DPH
     // '9': false,  // DPA
@@ -204,7 +202,8 @@ class _SongSearchPageState extends State<SongSearchPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(8.0),
-                          child: Text('难度筛选', style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text('难度筛选',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                         Wrap(
                           spacing: 2.0,
@@ -216,7 +215,8 @@ class _SongSearchPageState extends State<SongSearchPage> {
                                   value: entry.value,
                                   onChanged: (bool? value) {
                                     setState(() {
-                                      difficultyFilters[entry.key] = value ?? false;
+                                      difficultyFilters[entry.key] =
+                                          value ?? false;
                                       searchResults = _filterSongs();
                                     });
                                   },
@@ -239,7 +239,8 @@ class _SongSearchPageState extends State<SongSearchPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(8.0),
-                          child: Text('级别筛选', style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text('级别筛选',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                         Wrap(
                           spacing: 8.0,
@@ -286,17 +287,44 @@ class _SongSearchPageState extends State<SongSearchPage> {
               child: searchResults.isEmpty
                   ? Center(
                       child: Text(
-                        query.isEmpty
-                            ? '请输入搜索关键词'
-                            : '没有找到匹配的歌曲',
+                        query.isEmpty ? '请输入搜索关键词' : '没有找到匹配的歌曲',
                       ),
                     )
                   : ListView.builder(
                       itemCount: searchResults.length,
                       itemBuilder: (context, index) {
                         return ListTile(
-                          title: Text(searchResults[index].title),
-                          subtitle: Text(difficultyNames[searchResults[index].difficulty] ?? 'Unknown'),
+                          title: Text("${searchResults[index].title} (${difficultyNames[searchResults[index].difficulty]})"),
+                          subtitle: FutureBuilder<int?>(
+                            future: getUserScore(searchResults[index].title, searchResults[index].difficultyLevel),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return Text('加载中...');
+                              }
+                              if (snapshot.hasError) {
+                                return Text('加载失败');
+                              }
+                              final score = snapshot.data ?? 0;
+                              final percentage = (score / (2 * searchResults[index].notes)) * 100;
+
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      "$score (${percentage.toStringAsFixed(2)}%)",
+                                      textAlign: TextAlign.left, // 左对齐
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'BPI: ${calculateBPI(score, searchResults[index].avg, searchResults[index].wr, searchResults[index].notes).toStringAsFixed(2)}',
+                                      textAlign: TextAlign.right, // 右对齐
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -319,12 +347,28 @@ class _SongSearchPageState extends State<SongSearchPage> {
 
   // 修改筛选函数
   List<Song> _filterSongs() {
-    return allSongs.where((song) {
-      bool matchesQuery = query.isEmpty || 
-          song.title.toLowerCase().contains(query.toLowerCase());
+    // 完全匹配的结果
+    final exactMatches = allSongs.where((song) {
+      return song.title.toLowerCase() == query.toLowerCase();
+    }).toList();
+
+    // 部分匹配的结果
+    final partialMatches = allSongs.where((song) {
+      return song.title.toLowerCase().contains(query.toLowerCase()) &&
+          song.title.toLowerCase() != query.toLowerCase();
+    }).toList();
+
+    // 合并完全匹配和部分匹配的结果
+    final filteredSongs = [
+      ...exactMatches,
+      ...partialMatches,
+    ];
+
+    // 进一步筛选难度和级别
+    return filteredSongs.where((song) {
       bool matchesDifficulty = difficultyFilters[song.difficulty] ?? false;
       bool matchesLevel = levelFilters[song.difficultyLevel] ?? false;
-      return matchesQuery && matchesDifficulty && matchesLevel;
+      return matchesDifficulty && matchesLevel;
     }).toList();
   }
 }
@@ -344,13 +388,16 @@ class _SongDetailPageState extends State<SongDetailPage> {
   @override
   void initState() {
     super.initState();
-    _loadSavedScore();  // 在初始化时加载保存的分数
+    _loadSavedScore(); // 在初始化时加载保存的分数
   }
 
   Future<void> _loadSavedScore() async {
-    final savedScore = await getUserScore(widget.song.title, widget.song.difficultyLevel);
-    final savedBPI = await getUserBPI(widget.song.title, widget.song.difficultyLevel);
-    if (mounted) {  // 确保组件仍然挂载
+    final savedScore =
+        await getUserScore(widget.song.title, widget.song.difficultyLevel);
+    final savedBPI =
+        await getUserBPI(widget.song.title, widget.song.difficultyLevel);
+    if (mounted) {
+      // 确保组件仍然挂载
       setState(() {
         _savedScore = savedScore;
         if (savedScore != null) {
@@ -358,6 +405,15 @@ class _SongDetailPageState extends State<SongDetailPage> {
         }
         if (savedBPI != null) {
           _bpi = savedBPI;
+        } else if (savedScore != null) {
+          // 如果没有保存的 BPI，但有保存的分数，则重新计算 BPI
+          _bpi = calculateBPI(
+            savedScore,
+            widget.song.avg,
+            widget.song.wr,
+            widget.song.notes,
+            coefficient: widget.song.coef > 0 ? widget.song.coef : 1.175,
+          );
         }
       });
     }
@@ -391,7 +447,8 @@ class _SongDetailPageState extends State<SongDetailPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Note数', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Note数',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                       Text(widget.song.notes.toString()),
                     ],
                   ),
@@ -400,7 +457,8 @@ class _SongDetailPageState extends State<SongDetailPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('全国TOP', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('全国TOP',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                       Text(widget.song.wr.toString()),
                     ],
                   ),
@@ -409,7 +467,8 @@ class _SongDetailPageState extends State<SongDetailPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('皆传平均', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('皆传平均',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                       Text(widget.song.avg.toString()),
                     ],
                   ),
@@ -418,8 +477,44 @@ class _SongDetailPageState extends State<SongDetailPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('谱面系数', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(widget.song.coef > 0 ? widget.song.coef.toString() : "N/A（默认为1.175）"),
+                      Text('谱面系数',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(widget.song.coef > 0
+                          ? widget.song.coef.toString()
+                          : "N/A（默认为1.175）"),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(scoreToGrade(_savedScore ?? 0, widget.song.notes)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text("百分比:",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                          "${calculatePercentage(_savedScore ?? 0, widget.song.notes).toStringAsFixed(2)}%"),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text("BPI:",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_bpi?.toStringAsFixed(2) ?? "-15"),
                     ],
                   ),
                 ),
@@ -434,58 +529,35 @@ class _SongDetailPageState extends State<SongDetailPage> {
               keyboardType: TextInputType.number,
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final score = int.tryParse(_scoreController.text) ?? 0;
+
+                // 计算 BPI
                 setState(() {
                   _bpi = calculateBPI(
                     score,
                     widget.song.avg,
                     widget.song.wr,
                     widget.song.notes,
-                    coefficient: widget.song.coef>0?widget.song.coef:1.175,
+                    coefficient:
+                        widget.song.coef > 0 ? widget.song.coef : 1.175,
                   );
                 });
-                saveUserScore(widget.song.title, widget.song.difficultyLevel, score, _bpi!);
+
+                // 保存分数和 BPI
+                await saveUserScore(widget.song.title,
+                    widget.song.difficultyLevel, score, _bpi!);
+
+                // 更新 _savedScore 并触发 UI 刷新
+                setState(() {
+                  _savedScore = score;
+                });
               },
               child: Text('保存分数'),
             ),
-            if (_bpi != null)  // 只在有 BPI 值时显示
-              Padding(
-                padding: EdgeInsets.only(top: 20),
-                child: Text(
-                  'BPI是：${_bpi!.toStringAsFixed(2)}',  // 保留两位小数
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
-}
-
-// 保存用户分数和BPI到SharedPreferences
-Future<void> saveUserScore(String songTitle, String difficultyLevel, int score, num bpi) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final key = '${songTitle}_${difficultyLevel}';
-  await prefs.setString('${key}_score', score.toString());
-  await prefs.setDouble('${key}_bpi', bpi.toDouble());
-}
-
-// 获取用户分数
-Future<int?> getUserScore(String songTitle, String difficultyLevel) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final key = '${songTitle}_${difficultyLevel}';
-  final scoreStr = prefs.getString('${key}_score');
-  if (scoreStr != null) {
-    return int.tryParse(scoreStr);
-  }
-  return null;
-}
-
-// 获取用户BPI
-Future<double?> getUserBPI(String songTitle, String difficultyLevel) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final key = '${songTitle}_${difficultyLevel}';
-  return prefs.getDouble('${key}_bpi');
 }
