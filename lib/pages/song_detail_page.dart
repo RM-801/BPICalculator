@@ -4,6 +4,26 @@ import '../calc.dart';
 import '../save.dart';
 import '../models/song.dart';
 
+class InfoColumn extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const InfoColumn({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(value),
+        ],
+      ),
+    );
+  }
+}
+
 class SongDetailPage extends StatefulWidget {
   final Song song;
   SongDetailPage({required this.song});
@@ -74,47 +94,14 @@ class _SongDetailPageState extends State<SongDetailPage> {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Note数',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(widget.song.notes.toString()),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('全国TOP',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(widget.song.wr.toString()),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('皆传平均',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(widget.song.avg.toString()),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('谱面系数',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(widget.song.coef > 0
-                          ? widget.song.coef.toString()
-                          : "N/A（默认为1.175）"),
-                    ],
-                  ),
+                InfoColumn(title: 'Note数', value: widget.song.notes.toString()),
+                InfoColumn(title: '全国TOP', value: widget.song.wr.toString()),
+                InfoColumn(title: '皆传平均', value: widget.song.avg.toString()),
+                InfoColumn(
+                  title: '谱面系数',
+                  value: widget.song.coef > 0
+                      ? widget.song.coef.toString()
+                      : "N/A（默认为1.175）",
                 ),
               ],
             ),
