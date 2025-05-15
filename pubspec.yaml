@@ -27,3 +27,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/data_fixed.json
+    - assets/earth_power_filled.json

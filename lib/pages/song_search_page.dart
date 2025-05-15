@@ -5,6 +5,7 @@ import 'song_detail_page.dart';
 import '../models/song.dart';
 import '../save.dart';
 import '../calc.dart';
+import '../widgets/menu.dart';
 
 // import '../services/sort_service.dart';
 // import '../widgets/filters.dart';
@@ -150,6 +151,7 @@ class _SongSearchPageState extends State<SongSearchPage> {
           ),
         ],
       ),
+      drawer: const AppMenuDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
