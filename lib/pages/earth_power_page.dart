@@ -5,34 +5,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // 版本号与版本名映射
 const Map<String, String> versionMap = {
-  "5": "5th",
-  "6": "6th",
-  "7": "7th",
-  "8": "8th",
-  "9": "9th",
-  "10": "10th",
-  "11": "RED",
-  "12": "HAPPY SKY",
-  "13": "DistorteD",
-  "14": "GOLD",
-  "15": "DJT",
-  "16": "EMPRESS",
-  "17": "SIRIUS",
-  "18": "Resort Anthem",
-  "19": "Lincle",
-  "20": "tricoro",
-  "21": "SPADA",
-  "22": "PENDUAL",
-  "23": "copula",
-  "24": "SINOBUZ",
-  "25": "CANNON BALLERS",
-  "26": "Rootage",
-  "27": "HEROIC VERSE",
-  "28": "BISTROVER",
-  "29": "CastHour",
-  "30": "RESIDENT",
+  "32": "Pinky Crush",
   "31": "EPOLIS",
-  "32": "Pinky Crush"
+  "30": "RESIDENT",
+  "29": "CastHour",
+  "28": "BISTROVER",
+  "27": "HEROIC VERSE",
+  "26": "Rootage",
+  "25": "CANNON BALLERS",
+  "24": "SINOBUZ",
+  "23": "copula",
+  "22": "PENDUAL",
+  "21": "SPADA",
+  "20": "tricoro",
+  "19": "Lincle",
+  "18": "Resort Anthem",
+  "17": "SIRIUS",
+  "16": "EMPRESS",
+  "15": "DJ TROOPERS",
+  "14": "GOLD",
+  "13": "DistorteD",
+  "12": "HAPPY SKY",
+  "11": "RED",
+  "10": "10th",
+  "9": "9th",
+  "8": "8th",
+  "7": "7th",
+  "6": "6th",
+  "5": "5th"
 };
 
 // 状态缩写映射
@@ -70,6 +70,7 @@ class EarthPowerSong {
   final String difficulty;
   final String level;
   final String version;
+  final String normal;
   final String hard;
   String status;
 
@@ -78,6 +79,7 @@ class EarthPowerSong {
     required this.difficulty,
     required this.level,
     required this.version,
+    required this.normal,
     required this.hard,
     this.status = 'NO PLAY',
   });
@@ -88,6 +90,7 @@ class EarthPowerSong {
       difficulty: json['difficulty'],
       level: json['level'],
       version: json['version'],
+      normal: json['normal'],
       hard: json['hard'],
     );
   }
@@ -104,6 +107,7 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
   Set<String> selectedVersions = {};
   Set<String> selectedStatus = {};
   final ValueNotifier<int> statusBarNotifier = ValueNotifier(0);
+  bool showNormal = false; // 新增
 
   @override
   void dispose() {
@@ -119,6 +123,7 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
           future: loadEarthPowerSongs(),
           builder: (context, snapshot) {
             int belowHardCount = 0;
+            int belowNormalCount = 0;
             if (snapshot.hasData) {
               final songs = snapshot.data!;
               belowHardCount = songs
@@ -127,8 +132,15 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                       song.status != 'EX HARD CLEAR' &&
                       song.status != 'HARD CLEAR')
                   .length;
+              belowNormalCount = songs
+                  .where((song) =>
+                      song.status != 'FULLCOMBO' &&
+                      song.status != 'EX HARD CLEAR' &&
+                      song.status != 'HARD CLEAR'&&
+                      song.status != 'NORMAL CLEAR')
+                  .length;
             }
-            return Text('SP☆12ハード表(未難：$belowHardCount)');
+            return Text(showNormal?'SP☆12ノマゲ表(未ノマゲ：$belowNormalCount)':'SP☆12ハード表(未難：$belowHardCount)');
           },
         ),
       ),
@@ -150,14 +162,15 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
             final versionOk = selectedVersions.isEmpty ||
                 selectedVersions.contains(song.version);
             final statusOk = selectedStatus.isEmpty ||
-                selectedStatus.contains(song.status ?? 'NO PLAY');
+                selectedStatus.contains(song.status);
             return versionOk && statusOk;
           }).toList();
 
-          // 按 hard 字段分组
+          // 根据 showNormal 分组
           final Map<String, List<EarthPowerSong>> grouped = {};
           for (var song in filteredSongs) {
-            grouped.putIfAbsent(song.hard, () => []).add(song);
+            final key = showNormal ? song.normal : song.hard;
+            grouped.putIfAbsent(key, () => []).add(song);
           }
 
           return ListView(
@@ -171,7 +184,7 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                     for (var abbr in statusAbbr.values) abbr: 0,
                   };
                   for (var song in filteredSongs) {
-                    final abbr = statusAbbr[song.status ?? 'NO PLAY'] ?? 'N';
+                    final abbr = statusAbbr[song.status] ?? 'N';
                     statusCount[abbr] = (statusCount[abbr] ?? 0) + 1;
                   }
                   return Padding(
@@ -206,113 +219,128 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
               // 筛选器
               Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
+                child: Row(
                   children: [
-                    // 版本筛选
-                    FilterChip(
-                      label: const Text('版本筛选'),
-                      selected: selectedVersions.isNotEmpty,
-                      onSelected: (_) async {
-                        final result = await showDialog<Set<String>>(
-                          context: context,
-                          builder: (context) {
-                            final temp = Set<String>.from(selectedVersions);
-                            return AlertDialog(
-                              title: const Text('选择版本'),
-                              content: SizedBox(
-                                width: 300,
-                                height: 400,
-                                child: ListView(
-                                  children: versionMap.entries.map((e) {
-                                    return StatefulBuilder(
-                                      builder: (context, setStateDialog) {
-                                        return CheckboxListTile(
-                                          value: temp.contains(e.key),
-                                          title: Text(e.value),
-                                          onChanged: (v) {
-                                            if (v == true) {
-                                              temp.add(e.key);
-                                            } else {
-                                              temp.remove(e.key);
-                                            }
-                                            setStateDialog(() {});
-                                          },
-                                        );
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, temp),
-                                  child: const Text('确定'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        if (result != null) {
-                          setState(() {
-                            selectedVersions = result;
-                          });
-                        }
-                      },
+                    Expanded(
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          // 版本筛选
+                          FilterChip(
+                            label: const Text('版本筛选'),
+                            selected: selectedVersions.isNotEmpty,
+                            onSelected: (_) async {
+                              final result = await showDialog<Set<String>>(
+                                context: context,
+                                builder: (context) {
+                                  final temp = Set<String>.from(selectedVersions);
+                                  return AlertDialog(
+                                    title: const Text('选择版本'),
+                                    content: SizedBox(
+                                      width: 300,
+                                      height: 400,
+                                      child: ListView(
+                                        children: versionMap.entries.map((e) {
+                                          return StatefulBuilder(
+                                            builder: (context, setStateDialog) {
+                                              return CheckboxListTile(
+                                                value: temp.contains(e.key),
+                                                title: Text(e.value),
+                                                onChanged: (v) {
+                                                  if (v == true) {
+                                                    temp.add(e.key);
+                                                  } else {
+                                                    temp.remove(e.key);
+                                                  }
+                                                  setStateDialog(() {});
+                                                },
+                                              );
+                                            },
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, temp),
+                                        child: const Text('确定'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                              if (result != null) {
+                                setState(() {
+                                  selectedVersions = result;
+                                });
+                              }
+                            },
+                          ),
+                          // 状态筛选
+                          FilterChip(
+                            label: const Text('状态筛选'),
+                            selected: selectedStatus.isNotEmpty,
+                            onSelected: (_) async {
+                              final result = await showDialog<Set<String>>(
+                                context: context,
+                                builder: (context) {
+                                  final temp = Set<String>.from(selectedStatus);
+                                  return AlertDialog(
+                                    title: const Text('选择状态'),
+                                    content: SizedBox(
+                                      width: 300,
+                                      height: 400,
+                                      child: ListView(
+                                        children: [
+                                          ..._SongCardState.statusOptions
+                                              .map((s) => StatefulBuilder(
+                                                    builder:
+                                                        (context, setStateDialog) {
+                                                      return CheckboxListTile(
+                                                        value: temp.contains(s),
+                                                        title: Text(s),
+                                                        onChanged: (v) {
+                                                          if (v == true) {
+                                                            temp.add(s);
+                                                          } else {
+                                                            temp.remove(s);
+                                                          }
+                                                          setStateDialog(() {});
+                                                        },
+                                                      );
+                                                    },
+                                                  )),
+                                        ],
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, temp),
+                                        child: const Text('确定'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                              if (result != null) {
+                                setState(() {
+                                  selectedStatus = result;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                    // 状态筛选
-                    FilterChip(
-                      label: const Text('状态筛选'),
-                      selected: selectedStatus.isNotEmpty,
-                      onSelected: (_) async {
-                        final result = await showDialog<Set<String>>(
-                          context: context,
-                          builder: (context) {
-                            final temp = Set<String>.from(selectedStatus);
-                            return AlertDialog(
-                              title: const Text('选择状态'),
-                              content: SizedBox(
-                                width: 300,
-                                height: 400,
-                                child: ListView(
-                                  children: [
-                                    ..._SongCardState.statusOptions
-                                        .map((s) => StatefulBuilder(
-                                              builder:
-                                                  (context, setStateDialog) {
-                                                return CheckboxListTile(
-                                                  value: temp.contains(s),
-                                                  title: Text(s),
-                                                  onChanged: (v) {
-                                                    if (v == true) {
-                                                      temp.add(s);
-                                                    } else {
-                                                      temp.remove(s);
-                                                    }
-                                                    setStateDialog(() {});
-                                                  },
-                                                );
-                                              },
-                                            )),
-                                  ],
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, temp),
-                                  child: const Text('确定'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        if (result != null) {
-                          setState(() {
-                            selectedStatus = result;
-                          });
-                        }
+                    // 切换按钮
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          showNormal = !showNormal;
+                        });
                       },
+                      child: Text(showNormal ? '切换到 Hard' : '切换到 Normal'),
                     ),
                   ],
                 ),
@@ -403,10 +431,10 @@ class _SongCardState extends State<SongCard> {
   @override
   void initState() {
     super.initState();
-    _loadStatus();
+    _loadLampStatus();
   }
 
-  Future<void> _loadStatus() async {
+  Future<void> _loadLampStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final key = '${widget.song.title}_${widget.song.difficulty}';
     setState(() {
@@ -415,7 +443,7 @@ class _SongCardState extends State<SongCard> {
     });
   }
 
-  Future<void> _saveStatus(String value) async {
+  Future<void> _saveLampStatus(String value) async {
     final prefs = await SharedPreferences.getInstance();
     final key = '${widget.song.title}_${widget.song.difficulty}';
     await prefs.setString(key, value);
@@ -480,7 +508,7 @@ class _SongCardState extends State<SongCard> {
                   status = value;
                   widget.song.status = value;
                 });
-                _saveStatus(value); // 保存到本地
+                _saveLampStatus(value); // 保存到本地
                 widget.onStatusChanged?.call(); // 通知统计栏刷新
               },
               itemBuilder: (context) => statusOptions
