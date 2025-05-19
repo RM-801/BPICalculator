@@ -109,6 +109,12 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
   final ValueNotifier<int> statusBarNotifier = ValueNotifier(0);
   bool showNormal = false; // 新增
 
+  static const List<String> groupOrder = [
+    '地力S+','個人差S+','地力S','個人差S','地力A+','個人差A+','地力A','個人差A',
+    '地力B+','個人差B+','地力B','個人差B','地力C','個人差C','地力D','個人差D',
+    '地力E','個人差E','地力F','難易度未定'
+  ];
+
   @override
   void dispose() {
     statusBarNotifier.dispose();
@@ -137,10 +143,10 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                       song.status != 'FULLCOMBO' &&
                       song.status != 'EX HARD CLEAR' &&
                       song.status != 'HARD CLEAR'&&
-                      song.status != 'NORMAL CLEAR')
+                      song.status != 'CLEAR')
                   .length;
             }
-            return Text(showNormal?'SP☆12ノマゲ表(未ノマゲ：$belowNormalCount)':'SP☆12ハード表(未難：$belowHardCount)');
+            return Text(showNormal?'SP☆12ノマゲ表(未クリア：$belowNormalCount)':'SP☆12ハード表(未難：$belowHardCount)');
           },
         ),
       ),
@@ -166,13 +172,15 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
             return versionOk && statusOk;
           }).toList();
 
-          // 根据 showNormal 分组
+          // 分组时，未在 groupOrder 里的都归为 '難易度未定'
           final Map<String, List<EarthPowerSong>> grouped = {};
           for (var song in filteredSongs) {
             final key = showNormal ? song.normal : song.hard;
-            grouped.putIfAbsent(key, () => []).add(song);
+            final groupKey = groupOrder.contains(key) ? key : '難易度未定';
+            grouped.putIfAbsent(groupKey, () => []).add(song);
           }
 
+          // 展示时只遍历 groupOrder
           return ListView(
             children: [
               // 统计栏（只刷新自己）
@@ -346,56 +354,59 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                 ),
               ),
               // 分组展示
-              ...grouped.entries.map((entry) {
-                return ExpansionTile(
-                  title: Align(
-                    alignment: Alignment.center,
-                    child: Text(
-                      entry.key,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0, vertical: 4.0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            // 设定最小卡片宽度，比如 260
-                            const minCardWidth = 260.0;
-                            int columns = (constraints.maxWidth / minCardWidth)
-                                .floor()
-                                .clamp(2, 5);
-                            double cardWidth =
-                                (constraints.maxWidth - (columns - 1) * 8) /
-                                    columns;
-
-                            return Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: entry.value.map((song) {
-                                return SizedBox(
-                                  width: cardWidth,
-                                  child: SongCard(
-                                    song: song,
-                                    onStatusChanged: () {
-                                      statusBarNotifier.value++;
-                                    },
-                                  ),
-                                );
-                              }).toList(),
-                            );
-                          },
+              ...groupOrder
+                  .where((group) => grouped.containsKey(group))
+                  .map((group) {
+                    final entry = MapEntry(group, grouped[group]!);
+                    return ExpansionTile(
+                      title: Align(
+                        alignment: Alignment.center,
+                        child: Text(
+                          entry.key,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }).toList(),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0, vertical: 4.0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                const minCardWidth = 260.0;
+                                int columns = (constraints.maxWidth / minCardWidth)
+                                    .floor()
+                                    .clamp(2, 5);
+                                double cardWidth =
+                                    (constraints.maxWidth - (columns - 1) * 8) /
+                                        columns;
+
+                                return Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: entry.value.map((song) {
+                                    return SizedBox(
+                                      width: cardWidth,
+                                      child: SongCard(
+                                        song: song,
+                                        onStatusChanged: () {
+                                          statusBarNotifier.value++;
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  })
+                  .toList(),
             ],
           );
         },
