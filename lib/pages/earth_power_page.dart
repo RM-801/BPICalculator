@@ -72,6 +72,7 @@ class EarthPowerSong {
   final String version;
   final String normal;
   final String hard;
+  final String exhard;
   String status;
 
   EarthPowerSong({
@@ -81,6 +82,7 @@ class EarthPowerSong {
     required this.version,
     required this.normal,
     required this.hard,
+    required this.exhard,
     this.status = 'NO PLAY',
   });
 
@@ -92,6 +94,7 @@ class EarthPowerSong {
       version: json['version'],
       normal: json['normal'],
       hard: json['hard'],
+      exhard: json['exhard'], // 这里要用 exhard 字段
     );
   }
 }
@@ -107,12 +110,47 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
   Set<String> selectedVersions = {};
   Set<String> selectedStatus = {};
   final ValueNotifier<int> statusBarNotifier = ValueNotifier(0);
-  bool showNormal = false; // 新增
+  bool showNormal = false;
+  bool showExhard = false; // 新增
 
   static const List<String> groupOrder = [
-    '地力S+','個人差S+','地力S','個人差S','地力A+','個人差A+','地力A','個人差A',
-    '地力B+','個人差B+','地力B','個人差B','地力C','個人差C','地力D','個人差D',
-    '地力E','個人差E','地力F','難易度未定'
+    '地力S+',
+    '個人差S+',
+    '地力S',
+    '個人差S',
+    '地力A+',
+    '個人差A+',
+    '地力A',
+    '個人差A',
+    '地力B+',
+    '個人差B+',
+    '地力B',
+    '個人差B',
+    '地力C',
+    '個人差C',
+    '地力D',
+    '個人差D',
+    '地力E',
+    '個人差E',
+    '地力F',
+    '難易度未定'
+  ];
+
+  static const List<String> exhGroupOrder = [
+    'CPI > 2450',
+    'CPI 2400 - 2450',
+    'CPI 2350 - 2400',
+    'CPI 2300 - 2350',
+    'CPI 2250 - 2300',
+    'CPI 2200 - 2250',
+    'CPI 2150 - 2200',
+    'CPI 2100 - 2150',
+    'CPI 2000 - 2100',
+    'CPI 1900 - 2000',
+    'CPI 1800 - 1900',
+    'CPI 1700 - 1800',
+    'CPI < 1700',
+    'CPI 未定'
   ];
 
   @override
@@ -130,8 +168,14 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
           builder: (context, snapshot) {
             int belowHardCount = 0;
             int belowNormalCount = 0;
+            int belowEXHardCount = 0;
             if (snapshot.hasData) {
               final songs = snapshot.data!;
+              belowEXHardCount = songs
+                  .where((song) =>
+                      song.status != 'FULLCOMBO' &&
+                      song.status != 'EX HARD CLEAR')
+                  .length;
               belowHardCount = songs
                   .where((song) =>
                       song.status != 'FULLCOMBO' &&
@@ -142,11 +186,13 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                   .where((song) =>
                       song.status != 'FULLCOMBO' &&
                       song.status != 'EX HARD CLEAR' &&
-                      song.status != 'HARD CLEAR'&&
+                      song.status != 'HARD CLEAR' &&
                       song.status != 'CLEAR')
                   .length;
             }
-            return Text(showNormal?'SP☆12ノマゲ表(未クリア：$belowNormalCount)':'SP☆12ハード表(未難：$belowHardCount)');
+            return Text(showNormal
+                ? 'SP☆12ノマゲ表(未クリア：$belowNormalCount)'
+                : showExhard ? 'SP☆12エクハ表(未エクハ：$belowEXHardCount)' :'SP☆12ハード表(未難：$belowHardCount)');
           },
         ),
       ),
@@ -167,20 +213,66 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
           var filteredSongs = songs.where((song) {
             final versionOk = selectedVersions.isEmpty ||
                 selectedVersions.contains(song.version);
-            final statusOk = selectedStatus.isEmpty ||
-                selectedStatus.contains(song.status);
+            final statusOk =
+                selectedStatus.isEmpty || selectedStatus.contains(song.status);
             return versionOk && statusOk;
           }).toList();
 
-          // 分组时，未在 groupOrder 里的都归为 '難易度未定'
+          // 分组逻辑
           final Map<String, List<EarthPowerSong>> grouped = {};
-          for (var song in filteredSongs) {
-            final key = showNormal ? song.normal : song.hard;
-            final groupKey = groupOrder.contains(key) ? key : '難易度未定';
-            grouped.putIfAbsent(groupKey, () => []).add(song);
+          if (showExhard) {
+            // 按exhard分组
+            for (var song in filteredSongs) {
+              String groupKey = 'CPI 未定';
+              double? ex;
+              try {
+                ex = double.tryParse(song.exhard ?? '');
+              } catch (_) {
+                ex = null;
+              }
+              if (ex != null) {
+                if (ex > 2450) {
+                  groupKey = 'CPI > 2450';
+                } else if (ex >= 2400) {
+                  groupKey = 'CPI 2400 - 2450';
+                } else if (ex >= 2350) {
+                  groupKey = 'CPI 2350 - 2400';
+                } else if (ex >= 2300) {
+                  groupKey = 'CPI 2300 - 2350';
+                } else if (ex >= 2250) {
+                  groupKey = 'CPI 2250 - 2300';
+                } else if (ex >= 2200) {
+                  groupKey = 'CPI 2200 - 2250';
+                } else if (ex >= 2150) {
+                  groupKey = 'CPI 2150 - 2200';
+                } else if (ex >= 2100) {
+                  groupKey = 'CPI 2100 - 2150';
+                } else if (ex >= 2000) {
+                  groupKey = 'CPI 2000 - 2100';
+                } else if (ex >= 1900) {
+                  groupKey = 'CPI 1900 - 2000';
+                } else if (ex >= 1800) {
+                  groupKey = 'CPI 1800 - 1900';
+                } else if (ex >= 1700) {
+                  groupKey = 'CPI 1700 - 1800';
+                } else {
+                  groupKey = 'CPI < 1700';
+                }
+              }
+              grouped.putIfAbsent(groupKey, () => []).add(song);
+            }
+          } else {
+            // 原有分组
+            for (var song in filteredSongs) {
+              final key = showNormal ? song.normal : song.hard;
+              final groupKey = groupOrder.contains(key) ? key : '難易度未定';
+              grouped.putIfAbsent(groupKey, () => []).add(song);
+            }
           }
 
-          // 展示时只遍历 groupOrder
+          // 展示时用不同顺序
+          final List<String> order = showExhard ? exhGroupOrder : groupOrder;
+
           return ListView(
             children: [
               // 统计栏（只刷新自己）
@@ -242,7 +334,8 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                               final result = await showDialog<Set<String>>(
                                 context: context,
                                 builder: (context) {
-                                  final temp = Set<String>.from(selectedVersions);
+                                  final temp =
+                                      Set<String>.from(selectedVersions);
                                   return AlertDialog(
                                     title: const Text('选择版本'),
                                     content: SizedBox(
@@ -271,7 +364,8 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                                     ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(context, temp),
+                                        onPressed: () =>
+                                            Navigator.pop(context, temp),
                                         child: const Text('确定'),
                                       ),
                                     ],
@@ -303,8 +397,8 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                                         children: [
                                           ..._SongCardState.statusOptions
                                               .map((s) => StatefulBuilder(
-                                                    builder:
-                                                        (context, setStateDialog) {
+                                                    builder: (context,
+                                                        setStateDialog) {
                                                       return CheckboxListTile(
                                                         value: temp.contains(s),
                                                         title: Text(s),
@@ -324,7 +418,8 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                                     ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(context, temp),
+                                        onPressed: () =>
+                                            Navigator.pop(context, temp),
                                         child: const Text('确定'),
                                       ),
                                     ],
@@ -341,72 +436,80 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                         ],
                       ),
                     ),
-                    // 切换按钮
-                    ElevatedButton(
-                      onPressed: () {
+                    GroupSwitchBar(
+                      showNormal: showNormal,
+                      showExhard: showExhard,
+                      onSwitch: (mode) {
                         setState(() {
-                          showNormal = !showNormal;
+                          if (mode == 'hard') {
+                            showNormal = false;
+                            showExhard = false;
+                          } else if (mode == 'normal') {
+                            showNormal = true;
+                            showExhard = false;
+                          } else if (mode == 'exhard') {
+                            showNormal = false;
+                            showExhard = true;
+                          }
                         });
                       },
-                      child: Text(showNormal ? '切换到 Hard' : '切换到 Normal'),
                     ),
                   ],
                 ),
               ),
               // 分组展示
-              ...groupOrder
+              ...order
                   .where((group) => grouped.containsKey(group))
                   .map((group) {
-                    final entry = MapEntry(group, grouped[group]!);
-                    return ExpansionTile(
-                      title: Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          entry.key,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 18),
+                final entry = MapEntry(group, grouped[group]!);
+                return ExpansionTile(
+                  title: Align(
+                    alignment: Alignment.center,
+                    child: Text(
+                      entry.key,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 4.0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            const minCardWidth = 260.0;
+                            int columns = (constraints.maxWidth / minCardWidth)
+                                .floor()
+                                .clamp(2, 5);
+                            double cardWidth =
+                                (constraints.maxWidth - (columns - 1) * 8) /
+                                    columns;
+
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: entry.value.map((song) {
+                                return SizedBox(
+                                  width: cardWidth,
+                                  child: SongCard(
+                                    song: song,
+                                    onStatusChanged: () {
+                                      statusBarNotifier.value++;
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
                         ),
                       ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0, vertical: 4.0),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                const minCardWidth = 260.0;
-                                int columns = (constraints.maxWidth / minCardWidth)
-                                    .floor()
-                                    .clamp(2, 5);
-                                double cardWidth =
-                                    (constraints.maxWidth - (columns - 1) * 8) /
-                                        columns;
-
-                                return Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: entry.value.map((song) {
-                                    return SizedBox(
-                                      width: cardWidth,
-                                      child: SongCard(
-                                        song: song,
-                                        onStatusChanged: () {
-                                          statusBarNotifier.value++;
-                                        },
-                                      ),
-                                    );
-                                  }).toList(),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  })
-                  .toList(),
+                    ),
+                  ],
+                );
+              }).toList(),
             ],
           );
         },
@@ -530,5 +633,64 @@ class _SongCardState extends State<SongCard> {
         ),
       ),
     );
+  }
+}
+
+class GroupSwitchBar extends StatelessWidget {
+  final bool showNormal;
+  final bool showExhard;
+  final ValueChanged<String> onSwitch;
+
+  const GroupSwitchBar({
+    required this.showNormal,
+    required this.showExhard,
+    required this.onSwitch,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    List<Widget> buttons = [];
+    if (!showNormal && !showExhard) {
+      // HARD页面，只显示切换到NORMAL和EXHARD
+      buttons.addAll([
+        ElevatedButton(
+          onPressed: () => onSwitch('normal'),
+          child: const Text('NORMAL'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () => onSwitch('exhard'),
+          child: const Text('EXH'),
+        ),
+      ]);
+    } else if (showNormal && !showExhard) {
+      // NORMAL页面，只显示切换到HARD和EXHARD
+      buttons.addAll([
+        ElevatedButton(
+          onPressed: () => onSwitch('hard'),
+          child: const Text('HARD'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () => onSwitch('exhard'),
+          child: const Text('EXH'),
+        ),
+      ]);
+    } else if (!showNormal && showExhard) {
+      // EXHARD页面，只显示切换到HARD和NORMAL
+      buttons.addAll([
+       ElevatedButton(
+          onPressed: () => onSwitch('normal'),
+          child: const Text('NORMAL'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () => onSwitch('hard'),
+          child: const Text('HARD'),
+        ),
+      ]);
+    }
+    return Row(children: buttons);
   }
 }
