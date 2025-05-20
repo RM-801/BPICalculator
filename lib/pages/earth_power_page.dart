@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:io';
 
 // 版本号与版本名映射
 const Map<String, String> versionMap = {
@@ -42,7 +45,7 @@ const Map<String, String> statusAbbr = {
   'HARD CLEAR': 'HC',
   'CLEAR': 'NC',
   'EASY CLEAR': 'EC',
-  'ASSISTED CLEAR': 'AC',
+  'ASSIST CLEAR': 'AC',
   'FAILED': 'F',
   'NO PLAY': 'N',
 };
@@ -454,6 +457,13 @@ class _EarthPowerPageState extends State<EarthPowerPage> {
                         });
                       },
                     ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await importUserCsv(context);
+                        setState(() {}); // 导入后刷新
+                      },
+                      child: const Text('导入CSV'),
+                    ),
                   ],
                 ),
               ),
@@ -537,7 +547,7 @@ class _SongCardState extends State<SongCard> {
     'HARD CLEAR',
     'CLEAR',
     'EASY CLEAR',
-    'ASSISTED CLEAR',
+    'ASSIST CLEAR',
     'FAILED',
     'NO PLAY',
   ];
@@ -576,7 +586,7 @@ class _SongCardState extends State<SongCard> {
         return Colors.blue;
       case 'EASY CLEAR':
         return Colors.lightGreen;
-      case 'ASSISTED CLEAR':
+      case 'ASSIST CLEAR':
         return const Color(0xFF8C86FC);
       case 'FAILED':
         return Colors.grey;
@@ -693,4 +703,75 @@ class GroupSwitchBar extends StatelessWidget {
     }
     return Row(children: buttons);
   }
+}
+
+Future<void> importUserCsv(BuildContext context) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+  if (result == null || result.files.isEmpty) return;
+
+  final file = result.files.first;
+  String content;
+  if (file.bytes != null) {
+    content = String.fromCharCodes(file.bytes!);
+  } else if (file.path != null) {
+    content = await File(file.path!).readAsString();
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('文件读取失败')));
+    return;
+  }
+
+  final rows = const CsvToListConverter(eol: '\n', shouldParseNumbers: false).convert(content);
+
+  // 获取表头
+  final header = rows.first.cast<String>();
+  final titleIndex = header.indexWhere((h) => h.contains('タイトル'));
+  final aaIndex = header.indexWhere((h) => h.contains('ANOTHER') && h.contains('難易度'));
+  final afIndex = header.indexWhere((h) => h.contains('ANOTHER') && h.contains('クリアタイプ'));
+  final abIndex = header.indexWhere((h) => h.contains('HYPER') && h.contains('難易度'));
+  final agIndex = header.indexWhere((h) => h.contains('HYPER') && h.contains('クリアタイプ'));
+  final acIndex = header.indexWhere((h) => h.contains('LEGGENDARIA') && h.contains('難易度'));
+  final ahIndex = header.indexWhere((h) => h.contains('LEGGENDARIA') && h.contains('クリアタイプ'));
+
+  if ([titleIndex, aaIndex, afIndex, abIndex, agIndex, acIndex, ahIndex].contains(-1)) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV格式不正确')));
+    return;
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  int updateCount = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    final row = rows[i];
+    if (row.length <= [titleIndex, aaIndex, afIndex, abIndex, agIndex, acIndex, ahIndex].reduce((a, b) => a > b ? a : b)) continue;
+    final title = row[titleIndex]?.toString().trim();
+
+    // ANOTHER (SPA)
+    final levelA = row[aaIndex]?.toString();
+    final clearTypeA = row[afIndex]?.toString().trim();
+    if (levelA == '12' && title != null && clearTypeA != null && clearTypeA.isNotEmpty) {
+      final key = '${title}_SPA';
+      await prefs.setString(key, clearTypeA);
+      updateCount++;
+    }
+
+    // HYPER (SPH)
+    final levelH = row[abIndex]?.toString();
+    final clearTypeH = row[agIndex]?.toString().trim();
+    if (levelH == '12' && title != null && clearTypeH != null && clearTypeH.isNotEmpty) {
+      final key = '${title}_SPH';
+      await prefs.setString(key, clearTypeH);
+      updateCount++;
+    }
+
+    // LEGGENDARIA (SPL)
+    final levelL = row[acIndex]?.toString();
+    final clearTypeL = row[ahIndex]?.toString().trim();
+    if (levelL == '12' && title != null && clearTypeL != null && clearTypeL.isNotEmpty) {
+      final key = '${title}_SPL';
+      await prefs.setString(key, clearTypeL);
+      updateCount++;
+    }
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已导入 $updateCount 条记录')));
 }
